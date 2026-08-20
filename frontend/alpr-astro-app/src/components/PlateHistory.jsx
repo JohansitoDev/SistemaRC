@@ -1,0 +1,199 @@
+import React, { useState, useEffect } from 'react';
+import { Search, ShieldAlert, CheckCircle, Clock, Filter, AlertTriangle, FileSpreadsheet, RefreshCcw } from 'lucide-react';
+
+const API_URL = 'http://localhost:8000/api/plates';
+
+export default function PlateHistory() {
+  const [plates, setPlates] = useState([]);
+  const [filter, setFilter] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Función para obtener las placas reales desde MySQL a través de Laravel
+  const fetchPlatesFromDatabase = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(API_URL, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error al conectar con el servidor');
+      }
+
+      const data = await response.json();
+      // Aseguramos que data sea un array, dependiendo de cómo devuelva la respuesta Laravel
+      setPlates(Array.isArray(data) ? data : (data.data || []));
+    } catch (error) {
+      console.error('Error cargando historial de MySQL:', error);
+      // Fallback temporal a localStorage si la API falla
+      const localData = JSON.parse(localStorage.getItem('offline_plates') || '[]');
+      setPlates(localData);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlatesFromDatabase();
+  }, []);
+
+  // Filtrado combinado: Botones de estado + Buscador de texto
+  const filteredPlates = plates.filter((plate) => {
+    const matchesFilter =
+      filter === 'STOLEN' ? plate.is_stolen :
+      filter === 'SAVED' ? !plate.is_stolen : true;
+
+    const matchesSearch =
+      (plate.plate_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (plate.message || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesFilter && matchesSearch;
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Controles: Buscador + Filtros + Botón de Actualizar */}
+      <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
+        
+        {/* Buscador Dinámico */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por placa (Ej: OF00105)..."
+            className="w-full bg-white border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm font-semibold text-slate-800 placeholder-slate-400 shadow-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all"
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Botón para refrescar datos desde MySQL */}
+          <button
+            onClick={fetchPlatesFromDatabase}
+            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl shadow-sm transition-all flex items-center gap-2 text-xs font-bold"
+            title="Sincronizar con MySQL"
+          >
+            <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Actualizar</span>
+          </button>
+
+          {/* Botones de Filtro */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setFilter('ALL')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                filter === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-blue-50 hover:text-blue-600'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span>Todas</span>
+            </button>
+
+            <button
+              onClick={() => setFilter('STOLEN')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                filter === 'STOLEN'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-rose-50 hover:text-rose-600'
+              }`}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span>Robadas</span>
+            </button>
+
+            <button
+              onClick={() => setFilter('SAVED')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                filter === 'SAVED'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-600'
+              }`}
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span>Normales</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla con datos de MySQL */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-500 font-extrabold uppercase tracking-wider">
+                <th className="p-4">Matrícula (MySQL)</th>
+                <th className="p-4">Fecha y Hora</th>
+                <th className="p-4">Estado</th>
+                <th className="p-4">Detalle / Notificación</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm bg-white">
+              {loading ? (
+                <tr>
+                  <td colSpan="4" className="p-12 text-center text-slate-400 font-medium">
+                    Cargando registros desde la base de datos...
+                  </td>
+                </tr>
+              ) : filteredPlates.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="p-12 text-center text-slate-400 font-medium bg-white">
+                    <div className="flex flex-col items-center gap-2">
+                      <FileSpreadsheet className="w-10 h-10 text-slate-300" />
+                      <span className="text-slate-600 font-bold">No se encontraron registros en MySQL</span>
+                      <p className="text-xs text-slate-400">Verifica que tu backend en Laravel esté respondiendo correctamente.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredPlates.map((item, idx) => (
+                  <tr key={item.id || idx} className="hover:bg-blue-50/40 transition-colors">
+                    {/* Placa */}
+                    <td className="p-4">
+                      <span className="font-mono font-black text-slate-900 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 tracking-wider text-base shadow-sm">
+                        {item.plate_number}
+                      </span>
+                    </td>
+
+                    {/* Fecha y Hora */}
+                    <td className="p-4 text-slate-600 font-medium text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span>{item.captured_at || item.created_at}</span>
+                      </div>
+                    </td>
+
+                    {/* Badge de Estado */}
+                    <td className="p-4">
+                      {item.is_stolen ? (
+                        <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-black px-3 py-1 rounded-full shadow-sm">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> ROBADA
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> REGISTRADA
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Detalle */}
+                    <td className="p-4 text-xs font-medium text-slate-600">
+                      {item.message || 'Procesado en base de datos MySQL'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

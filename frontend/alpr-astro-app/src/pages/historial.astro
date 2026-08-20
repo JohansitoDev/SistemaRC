@@ -1,0 +1,28 @@
+---
+import SidebarLayout from '../components/SidebarLayout.jsx';
+import PlateStats from '../components/PlateStats.jsx';
+import PlateHistory from '../components/PlateHistory.jsx';
+import '../styles/global.css';
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ALPR - Historial de Lecturas y Estadísticas</title>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <SidebarLayout currentPath="/historial" client:load>
+      <div class="mb-6">
+        <h2 class="text-2xl font-black text-slate-900">Historial y Estadísticas</h2>
+        <p class="text-sm text-slate-500 font-medium">Registro completo y métricas de capturas almacenadas en el sistema.</p>
+      </div>
+
+      {/* Tarjetas de estadísticas arriba */}
+      <PlateStats client:load />
+
+      {/* Historial de lecturas abajo */}
+      <PlateHistory client:load />
+    </SidebarLayout>
+  </body>
+</html>

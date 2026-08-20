@@ -1,0 +1,22 @@
+---
+import SidebarLayout from '../components/SidebarLayout.jsx';
+import PlateScanner from '../components/PlateScanner.jsx';
+import '../styles/global.css';
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ALPR - Escáner en Tiempo Real</title>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <SidebarLayout currentPath="/" client:load>
+      <div class="mb-6">
+        <h2 class="text-2xl font-black text-slate-900">Escáner de Placas</h2>
+        <p class="text-sm text-slate-500 font-medium">Procesamineto y escaneo de matricula.</p>
+      </div>
+      <PlateScanner client:load />
+    </SidebarLayout>
+  </body>
+</html>
