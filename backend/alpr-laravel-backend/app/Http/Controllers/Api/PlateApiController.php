@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Validator;
 class PlateApiController extends Controller
 {
     /**
-     * Guardar la placa escaneada, verificar duplicados y alertar si es robada.
+    * Guardar cada captura, verificar si es robada y devolver el resultado.
      */
     public function store(Request $request)
     {
@@ -30,24 +30,13 @@ class PlateApiController extends Controller
             ], 400);
         }
 
-       
-        $plateNumber = strtoupper(trim($request->input('plate_number')));
+        $plateNumber = preg_replace(
+            '/[^A-Z0-9]/',
+            '',
+            strtoupper(trim($request->input('plate_number')))
+        );
         $capturedAt  = $request->input('captured_at') ? Carbon::parse($request->input('captured_at')) : Carbon::now();
 
-        
-        $existsRecently = Plate::where('plate_number', $plateNumber)
-            ->where('captured_at', '>=', $capturedAt->copy()->subMinutes(15))
-            ->exists();
-
-        if ($existsRecently) {
-            return response()->json([
-                'success' => false,
-                'status'  => 'DUPLICATE',
-                'message' => "La placa {$plateNumber} ya fue escaneada recientemente. No se guardará de nuevo."
-            ], 409);
-        }
-
-      
         $isStolen = StolenPlate::where('plate_number', $plateNumber)->exists();
 
      

@@ -84,13 +84,65 @@ export default function PlateScanner() {
       const worker = await createWorker('eng');
       await worker.setParameters({
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+        tessedit_pageseg_mode: '7',
       });
 
-      const { data: { text } } = await worker.recognize(canvas);
+      // La banda superior contiene texto decorativo. OCR solo sobre los caracteres grandes.
+      const ocrCanvas = document.createElement('canvas');
+      const ocrContext = ocrCanvas.getContext('2d', { willReadFrequently: true });
+      const plateX = cropSize * 0.06;
+      const plateY = cropSize * 0.43;
+      const plateWidth = cropSize * 0.88;
+      const plateHeight = cropSize * 0.5;
+      ocrCanvas.width = Math.round(cropSize * 2);
+      ocrCanvas.height = Math.round(plateHeight * 2);
+      ocrContext.drawImage(
+        canvas,
+        plateX, plateY, plateWidth, plateHeight,
+        0, 0, ocrCanvas.width, ocrCanvas.height
+      );
+
+      const imageData = ocrContext.getImageData(0, 0, ocrCanvas.width, ocrCanvas.height);
+      for (let index = 0; index < imageData.data.length; index += 4) {
+        const gray = Math.round(
+          imageData.data[index] * 0.299 +
+          imageData.data[index + 1] * 0.587 +
+          imageData.data[index + 2] * 0.114
+        );
+        const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.8 + 128));
+        imageData.data[index] = contrast;
+        imageData.data[index + 1] = contrast;
+        imageData.data[index + 2] = contrast;
+      }
+      ocrContext.putImageData(imageData, 0, 0);
+
+      const normalResult = await worker.recognize(ocrCanvas);
+      const thresholdCanvas = document.createElement('canvas');
+      thresholdCanvas.width = ocrCanvas.width;
+      thresholdCanvas.height = ocrCanvas.height;
+      const thresholdContext = thresholdCanvas.getContext('2d');
+      thresholdContext.drawImage(ocrCanvas, 0, 0);
+      const thresholdData = thresholdContext.getImageData(0, 0, thresholdCanvas.width, thresholdCanvas.height);
+      for (let index = 0; index < thresholdData.data.length; index += 4) {
+        const value = thresholdData.data[index] > 145 ? 255 : 0;
+        thresholdData.data[index] = value;
+        thresholdData.data[index + 1] = value;
+        thresholdData.data[index + 2] = value;
+      }
+      thresholdContext.putImageData(thresholdData, 0, 0);
+      const thresholdResult = await worker.recognize(thresholdCanvas);
       await worker.terminate();
 
-      // Limpiar texto extraído
-      let rawClean = text.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim();
+      const candidates = [normalResult.data.text, thresholdResult.data.text]
+        .map((text) => text.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim())
+        .filter((text) => text.length >= 5 && text.length <= 8 && /\d/.test(text))
+        .sort((first, second) => {
+          const firstDigits = (first.match(/\d/g) || []).length;
+          const secondDigits = (second.match(/\d/g) || []).length;
+          return secondDigits - firstDigits;
+        });
+
+      let rawClean = candidates[0] || '';
 
       if (rawClean.length > 8) {
         rawClean = rawClean.substring(0, 8);
@@ -119,27 +171,28 @@ export default function PlateScanner() {
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Error en el servidor: ${response.status}`);
+      const resData = await response.json();
+      const apiRecord = resData.plate || resData;
+
+      if (!response.ok && resData.status !== 'DUPLICATE') {
+        throw new Error(resData.message || `Error en el servidor: ${response.status}`);
       }
 
-      const resData = await response.json();
-
       const record = {
-        plate_number: rawClean,
-        captured_at: resData.captured_at || new Date().toLocaleString(),
-        is_stolen: resData.is_stolen,
-        status: resData.status,
-        message: resData.message
+        plate_number: apiRecord.plate_number || rawClean,
+        captured_at: apiRecord.captured_at || new Date().toLocaleString(),
+        is_stolen: apiRecord.is_stolen,
+        status: resData.status || apiRecord.status || 'SAVED',
+        message: resData.message || apiRecord.message
       };
 
       const stored = JSON.parse(localStorage.getItem('offline_plates') || '[]');
       localStorage.setItem('offline_plates', JSON.stringify([record, ...stored]));
 
-      if (resData.is_stolen) {
+      if (record.is_stolen) {
         setCurrentAlert(record);
         setStatusMessage('¡ALERTA CRÍTICA: Vehículo con reporte de robo!');
-      } else if (resData.status === 'DUPLICATE') {
+      } else if (record.status === 'DUPLICATE') {
         setStatusMessage('Placa duplicada (registrada recientemente).');
       } else {
         setStatusMessage('Placa registrada exitosamente en MySQL.');
@@ -227,9 +280,9 @@ export default function PlateScanner() {
             {/* Guía visual interna también cuadrada (2x2) */}
             {isCameraActive && !capturedImage && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="w-3/4 h-3/4 border-2 border-dashed border-yellow-400 rounded-2xl bg-yellow-400/10 flex items-center justify-center shadow-inner">
+                <div className="absolute top-[43%] w-[88%] h-[50%] border-2 border-dashed border-yellow-400 rounded-xl bg-yellow-400/10 flex items-center justify-center shadow-inner">
                   <span className="text-[10px] uppercase font-bold text-yellow-200 bg-black/70 px-2 py-1 rounded text-center">
-                    Encuadra la placa en el recuadro 2x2
+                    Coloca la placa dentro del recuadro
                   </span>
                 </div>
               </div>

@@ -50,7 +50,18 @@ class PlateController extends Controller
                 'captured_at' => 'required|date',
             ]);
 
-            $plateNumberClean = strtoupper(trim($validated['plate_number']));
+            $plateNumberClean = preg_replace(
+                '/[^A-Z0-9]/',
+                '',
+                strtoupper(trim($validated['plate_number']))
+            );
+
+            if (strlen($plateNumberClean) < 3) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La placa debe contener al menos 3 caracteres alfanuméricos.'
+                ], 422);
+            }
 
             // Verificar automáticamente en la tabla stolen_plates con limpieza estricta
             $stolenRecord = DB::table('stolen_plates')
@@ -74,8 +85,12 @@ class PlateController extends Controller
 
             return response()->json([
                 'success' => true,
+                'status' => $status,
+                'plate_number' => $plate->plate_number,
+                'is_stolen' => (bool) $plate->is_stolen,
+                'captured_at' => $plate->captured_at->toDateTimeString(),
+                'message' => $message,
                 'plate' => $plate,
-                'message' => 'Placa registrada exitosamente en MySQL.'
             ], 201);
 
         } catch (Exception $e) {
