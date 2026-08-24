@@ -1,4 +1,30 @@
-# Astro Starter Kit: Minimal
+# ALPR Vision
+
+## Arranque del sistema
+
+1. Copia `.env.example` a `.env` y ajusta las URLs si usas otros puertos.
+2. Coloca los pesos YOLO de deteccion de placas en `../../plate-detector/models/`.
+3. Inicia el detector desde la carpeta `plate-detector`:
+
+```powershell
+python -m pip install -r requirements.txt
+python -m uvicorn server:app --host 0.0.0.0 --port 8001
+```
+
+4. Inicia Laravel en el puerto 8000 y ejecuta sus migraciones:
+
+```powershell
+php artisan migrate
+```
+
+5. Inicia este frontend:
+
+```powershell
+npm install
+npm run dev
+```
+
+Abre `https://localhost:4321`. La cámara captura la imagen, el detector devuelve la lectura y Laravel la guarda y comprueba si está reportada.
 
 ```sh
 npm create astro@latest -- --template minimal

@@ -43,7 +43,7 @@ class PlateController extends Controller
     }
 
     public function store(Request $request)
-    {
+     {
         try {
             $validated = $request->validate([
                 'plate_number' => 'required|string|max:20',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShieldAlert, CheckCircle, Clock, Filter, AlertTriangle, FileSpreadsheet, RefreshCcw } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/plates';
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
 
 export default function PlateHistory() {
   const [plates, setPlates] = useState([]);

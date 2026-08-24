@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Car, ShieldAlert, CheckCircle } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/plates';
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
 
 export default function PlateDashboard() {
   const [plateInput, setPlateInput] = useState('');

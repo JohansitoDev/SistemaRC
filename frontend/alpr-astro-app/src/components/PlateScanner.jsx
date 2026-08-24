@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { createWorker } from 'tesseract.js';
 import { Camera, RefreshCw, CheckCircle, ShieldAlert } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/plates';
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
+const ALPR_URL = import.meta.env.PUBLIC_ALPR_URL || 'http://localhost:8001';
 
 export default function PlateScanner() {
   const videoRef = useRef(null);
@@ -18,17 +18,37 @@ export default function PlateScanner() {
   // Encender Cámara Web
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1080 }, height: { ideal: 1080 } }
-      });
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Este navegador no permite acceder a la cámara. Abre el sitio por HTTPS.');
+      }
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1080 }, height: { ideal: 1080 } }
+        });
+      } catch (firstError) {
+        if (firstError.name !== 'NotReadableError' && firstError.name !== 'OverconstrainedError') {
+          throw firstError;
+        }
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setIsCameraActive(true);
         setCapturedImage(null);
+        setStatusMessage('Cámara activa. Coloca la placa dentro del recuadro.');
       }
     } catch (err) {
       console.error('Error accediendo a la cámara:', err);
-      alert('No se pudo acceder a la cámara web.');
+      const cameraMessages = {
+        NotAllowedError: 'Permiso de cámara bloqueado. Actívalo en el candado de la dirección del navegador.',
+        NotFoundError: 'No se encontró ninguna cámara conectada.',
+        NotReadableError: 'La cámara está siendo usada por otra aplicación. Cierra Teams, Zoom, OBS u otra pestaña que la use y vuelve a intentar.',
+        SecurityError: 'La cámara necesita HTTPS o localhost para funcionar.',
+      };
+      setStatusMessage(cameraMessages[err.name] || err.message || 'No se pudo acceder a la cámara web.');
     }
   };
 
@@ -44,7 +64,7 @@ export default function PlateScanner() {
     return () => stopCamera();
   }, []);
 
-  // Capturar y procesar tomando exactamente el área del recuadro cuadrado 2x2
+  // Enviar el cuadro completo permite detectar placas fuera del centro del visor.
   const captureAndScan = async () => {
     if (!videoRef.current || !canvasRef.current || processing) return;
 
@@ -58,104 +78,43 @@ export default function PlateScanner() {
 
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
+    if (!videoWidth || !videoHeight) {
+      setProcessing(false);
+      setStatusMessage('La cámara todavía no está lista. Espera un momento y vuelve a capturar.');
+      return;
+    }
 
-    // Como el contenedor es un cuadrado perfecto (2x2), 
-    // tomamos el lado menor del video para hacer un recorte cuadrado exacto al centro
-    const minSide = Math.min(videoWidth, videoHeight);
-    const cropSize = minSide * 0.75; // 75% del área central cuadrada
-    const cropX = (videoWidth - cropSize) / 2;
-    const cropY = (videoHeight - cropSize) / 2;
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
+    context.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-    // Configurar el canvas con las dimensiones cuadradas del recorte
-    canvas.width = cropSize;
-    canvas.height = cropSize;
-
-    context.drawImage(
-      video, 
-      cropX, cropY, cropSize, cropSize, // Fuente (cuadrado central del video)
-      0, 0, cropSize, cropSize          // Destino (en el canvas)
-    );
-
-    // Generar la vista previa visual cuadrada
     const imagePreviewUrl = canvas.toDataURL('image/png');
     setCapturedImage(imagePreviewUrl);
 
     try {
-      const worker = await createWorker('eng');
-      await worker.setParameters({
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-        tessedit_pageseg_mode: '7',
+      const imageBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo preparar la captura.'))), 'image/jpeg', 0.95);
       });
+      const formData = new FormData();
+      formData.append('file', imageBlob, 'plate-capture.jpg');
 
-      // La banda superior contiene texto decorativo. OCR solo sobre los caracteres grandes.
-      const ocrCanvas = document.createElement('canvas');
-      const ocrContext = ocrCanvas.getContext('2d', { willReadFrequently: true });
-      const plateX = cropSize * 0.06;
-      const plateY = cropSize * 0.43;
-      const plateWidth = cropSize * 0.88;
-      const plateHeight = cropSize * 0.5;
-      ocrCanvas.width = Math.round(cropSize * 2);
-      ocrCanvas.height = Math.round(plateHeight * 2);
-      ocrContext.drawImage(
-        canvas,
-        plateX, plateY, plateWidth, plateHeight,
-        0, 0, ocrCanvas.width, ocrCanvas.height
-      );
-
-      const imageData = ocrContext.getImageData(0, 0, ocrCanvas.width, ocrCanvas.height);
-      for (let index = 0; index < imageData.data.length; index += 4) {
-        const gray = Math.round(
-          imageData.data[index] * 0.299 +
-          imageData.data[index + 1] * 0.587 +
-          imageData.data[index + 2] * 0.114
-        );
-        const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.8 + 128));
-        imageData.data[index] = contrast;
-        imageData.data[index + 1] = contrast;
-        imageData.data[index + 2] = contrast;
+      let detectorResponse;
+      try {
+        detectorResponse = await fetch(`${ALPR_URL}/scan`, { method: 'POST', body: formData });
+      } catch (detectorError) {
+        throw new Error(`Detector apagado o inaccesible en ${ALPR_URL}. Inicia el servidor FastAPI y verifica PUBLIC_ALPR_URL.`);
       }
-      ocrContext.putImageData(imageData, 0, 0);
-
-      const normalResult = await worker.recognize(ocrCanvas);
-      const thresholdCanvas = document.createElement('canvas');
-      thresholdCanvas.width = ocrCanvas.width;
-      thresholdCanvas.height = ocrCanvas.height;
-      const thresholdContext = thresholdCanvas.getContext('2d');
-      thresholdContext.drawImage(ocrCanvas, 0, 0);
-      const thresholdData = thresholdContext.getImageData(0, 0, thresholdCanvas.width, thresholdCanvas.height);
-      for (let index = 0; index < thresholdData.data.length; index += 4) {
-        const value = thresholdData.data[index] > 145 ? 255 : 0;
-        thresholdData.data[index] = value;
-        thresholdData.data[index + 1] = value;
-        thresholdData.data[index + 2] = value;
-      }
-      thresholdContext.putImageData(thresholdData, 0, 0);
-      const thresholdResult = await worker.recognize(thresholdCanvas);
-      await worker.terminate();
-
-      const candidates = [normalResult.data.text, thresholdResult.data.text]
-        .map((text) => text.replace(/[^A-Z0-9]/gi, '').toUpperCase().trim())
-        .filter((text) => text.length >= 5 && text.length <= 8 && /\d/.test(text))
-        .sort((first, second) => {
-          const firstDigits = (first.match(/\d/g) || []).length;
-          const secondDigits = (second.match(/\d/g) || []).length;
-          return secondDigits - firstDigits;
-        });
-
-      let rawClean = candidates[0] || '';
-
-      if (rawClean.length > 8) {
-        rawClean = rawClean.substring(0, 8);
+      const detectorData = await detectorResponse.json();
+      if (!detectorResponse.ok) {
+        throw new Error(detectorData.detail || 'FastALPR no pudo leer la matrícula.');
       }
 
-      if (!rawClean || rawClean.length < 5) {
-        setStatusMessage('No se leyeron los números completos. Asegúrate de encuadrarlos bien.');
-        setDetectedPlate('');
-        setProcessing(false);
-        return;
+      const rawClean = (detectorData.plate_number || '').trim().toUpperCase();
+      if (!rawClean) {
+        throw new Error('El detector no pudo leer los caracteres de la placa.');
       }
-
       setDetectedPlate(rawClean);
+
       setStatusMessage(`Matrícula detectada: ${rawClean}. Guardando en base de datos...`);
 
       // Enviar a Laravel Backend
@@ -199,7 +158,7 @@ export default function PlateScanner() {
       }
     } catch (error) {
       console.error('Error procesando OCR o API:', error);
-      setStatusMessage('Error al conectar con la API de Laravel o la BD.');
+      setStatusMessage(error.message || 'No se pudo procesar la captura.');
     } finally {
       setProcessing(false);
     }
