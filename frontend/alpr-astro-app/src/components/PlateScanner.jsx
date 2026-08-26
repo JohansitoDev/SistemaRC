@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, RefreshCw, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Camera, ShieldAlert, Upload, X } from 'lucide-react';
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
 const ALPR_URL = import.meta.env.PUBLIC_ALPR_URL || 'http://localhost:8001';
@@ -7,6 +7,7 @@ const ALPR_URL = import.meta.env.PUBLIC_ALPR_URL || 'http://localhost:8001';
 export default function PlateScanner() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -15,11 +16,72 @@ export default function PlateScanner() {
   const [currentAlert, setCurrentAlert] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
 
-  // Encender Cámara Web
+  const scanImage = async (imageBlob) => {
+    setProcessing(true);
+    setStatusMessage('Analizando imagen...');
+    setCurrentAlert(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', imageBlob, 'plate-image.jpg');
+
+      let detectorResponse;
+      try {
+        detectorResponse = await fetch(`${ALPR_URL}/scan`, { method: 'POST', body: formData });
+      } catch {
+        throw new Error('Detector no disponible.');
+      }
+      const detectorData = await detectorResponse.json();
+      if (!detectorResponse.ok) throw new Error(detectorData.detail || 'Matrícula no detectada.');
+
+      const rawClean = (detectorData.plate_number || '').trim().toUpperCase();
+      if (!rawClean) throw new Error('No se detectaron caracteres.');
+
+      setDetectedPlate(rawClean);
+      setStatusMessage(`Placa: ${rawClean}`);
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ plate_number: rawClean, captured_at: new Date().toISOString() })
+      });
+
+      const resData = await response.json();
+      const apiRecord = resData.plate || resData;
+      if (!response.ok && resData.status !== 'DUPLICATE') throw new Error(resData.message || 'Error del servidor.');
+
+      if (apiRecord.is_stolen) {
+        setCurrentAlert(apiRecord);
+        setStatusMessage('Vehículo reportado como robado.');
+      } else {
+        setStatusMessage('Matrícula registrada correctamente.');
+      }
+    } catch (error) {
+      console.error(error);
+      setStatusMessage(error.message || 'Error al procesar.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleFileSelected = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCapturedImage(reader.result);
+      setDetectedPlate('');
+      scanImage(file);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
   const startCamera = async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Este navegador no permite acceder a la cámara. Abre el sitio por HTTPS.');
+        throw new Error('Navegador no compatible con cámara.');
       }
 
       let stream;
@@ -27,10 +89,7 @@ export default function PlateScanner() {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1080 }, height: { ideal: 1080 } }
         });
-      } catch (firstError) {
-        if (firstError.name !== 'NotReadableError' && firstError.name !== 'OverconstrainedError') {
-          throw firstError;
-        }
+      } catch {
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
@@ -38,17 +97,12 @@ export default function PlateScanner() {
         videoRef.current.srcObject = stream;
         setIsCameraActive(true);
         setCapturedImage(null);
-        setStatusMessage('Cámara activa. Coloca la placa dentro del recuadro.');
+        setDetectedPlate('');
+        setStatusMessage('Cámara activa.');
       }
     } catch (err) {
-      console.error('Error accediendo a la cámara:', err);
-      const cameraMessages = {
-        NotAllowedError: 'Permiso de cámara bloqueado. Actívalo en el candado de la dirección del navegador.',
-        NotFoundError: 'No se encontró ninguna cámara conectada.',
-        NotReadableError: 'La cámara está siendo usada por otra aplicación. Cierra Teams, Zoom, OBS u otra pestaña que la use y vuelve a intentar.',
-        SecurityError: 'La cámara necesita HTTPS o localhost para funcionar.',
-      };
-      setStatusMessage(cameraMessages[err.name] || err.message || 'No se pudo acceder a la cámara web.');
+      console.error(err);
+      setStatusMessage('No se pudo acceder a la cámara.');
     }
   };
 
@@ -64,13 +118,8 @@ export default function PlateScanner() {
     return () => stopCamera();
   }, []);
 
-  // Enviar el cuadro completo permite detectar placas fuera del centro del visor.
   const captureAndScan = async () => {
     if (!videoRef.current || !canvasRef.current || processing) return;
-
-    setProcessing(true);
-    setStatusMessage('Capturando foto y analizando caracteres...');
-    setCurrentAlert(null);
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -79,8 +128,7 @@ export default function PlateScanner() {
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
     if (!videoWidth || !videoHeight) {
-      setProcessing(false);
-      setStatusMessage('La cámara todavía no está lista. Espera un momento y vuelve a capturar.');
+      setStatusMessage('Cámara no lista.');
       return;
     }
 
@@ -91,224 +139,64 @@ export default function PlateScanner() {
     const imagePreviewUrl = canvas.toDataURL('image/png');
     setCapturedImage(imagePreviewUrl);
 
-    try {
-      const imageBlob = await new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo preparar la captura.'))), 'image/jpeg', 0.95);
-      });
-      const formData = new FormData();
-      formData.append('file', imageBlob, 'plate-capture.jpg');
-
-      let detectorResponse;
-      try {
-        detectorResponse = await fetch(`${ALPR_URL}/scan`, { method: 'POST', body: formData });
-      } catch (detectorError) {
-        throw new Error(`Detector apagado o inaccesible en ${ALPR_URL}. Inicia el servidor FastAPI y verifica PUBLIC_ALPR_URL.`);
-      }
-      const detectorData = await detectorResponse.json();
-      if (!detectorResponse.ok) {
-        throw new Error(detectorData.detail || 'FastALPR no pudo leer la matrícula.');
-      }
-
-      const rawClean = (detectorData.plate_number || '').trim().toUpperCase();
-      if (!rawClean) {
-        throw new Error('El detector no pudo leer los caracteres de la placa.');
-      }
-      setDetectedPlate(rawClean);
-
-      setStatusMessage(`Matrícula detectada: ${rawClean}. Guardando en base de datos...`);
-
-      // Enviar a Laravel Backend
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          plate_number: rawClean,
-          captured_at: new Date().toISOString()
-        })
-      });
-
-      const resData = await response.json();
-      const apiRecord = resData.plate || resData;
-
-      if (!response.ok && resData.status !== 'DUPLICATE') {
-        throw new Error(resData.message || `Error en el servidor: ${response.status}`);
-      }
-
-      const record = {
-        plate_number: apiRecord.plate_number || rawClean,
-        captured_at: apiRecord.captured_at || new Date().toLocaleString(),
-        is_stolen: apiRecord.is_stolen,
-        status: resData.status || apiRecord.status || 'SAVED',
-        message: resData.message || apiRecord.message
-      };
-
-      const stored = JSON.parse(localStorage.getItem('offline_plates') || '[]');
-      localStorage.setItem('offline_plates', JSON.stringify([record, ...stored]));
-
-      if (record.is_stolen) {
-        setCurrentAlert(record);
-        setStatusMessage('¡ALERTA CRÍTICA: Vehículo con reporte de robo!');
-      } else if (record.status === 'DUPLICATE') {
-        setStatusMessage('Placa duplicada (registrada recientemente).');
-      } else {
-        setStatusMessage('Placa registrada exitosamente en MySQL.');
-      }
-    } catch (error) {
-      console.error('Error procesando OCR o API:', error);
-      setStatusMessage(error.message || 'No se pudo procesar la captura.');
-    } finally {
-      setProcessing(false);
-    }
+    const imageBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Error en captura.'))), 'image/jpeg', 0.95);
+    });
+    scanImage(imageBlob);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Banner de Alerta Crítica por Robo */}
-      {currentAlert && (
-        <div className="bg-rose-600 text-white p-5 rounded-2xl flex items-center gap-4 shadow-lg shadow-rose-600/20 animate-bounce">
-          <ShieldAlert className="w-10 h-10 text-white" />
-          <div>
-            <span className="bg-white text-rose-700 text-[10px] font-black uppercase px-2 py-0.5 rounded">
-              Alerta de Seguridad
-            </span>
-            <h3 className="text-xl font-black mt-1">¡VEHÍCULO REPORTADO COMO ROBADO!</h3>
-            <p className="text-sm font-semibold text-rose-100">
-              Matrícula: <span className="bg-black/30 font-mono px-2 py-0.5 rounded text-yellow-300">{currentAlert.plate_number}</span>
-            </p>
+    <section className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-3xl flex-col items-center justify-center px-2 py-8">
+      <div className="mb-10 text-center">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-900/10">
+          <Camera className="h-7 w-7" />
+        </div>
+        <h2 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">¿Qué placa quieres consultar?</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-500">Sube una fotografía o activa la cámara para identificar una matrícula.</p>
+      </div>
+
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+
+      {(isCameraActive || capturedImage) && (
+        <div className="relative mb-6 w-full max-w-xl overflow-hidden rounded-3xl bg-slate-950 p-2 shadow-xl shadow-slate-900/10">
+          <div className="relative aspect-video overflow-hidden rounded-2xl bg-slate-900">
+          {capturedImage ? (
+            <img src={capturedImage} alt="Captura" className="w-full h-full object-cover" />
+          ) : (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${!isCameraActive && 'hidden'}`}
+            />
+          )}
+          {isCameraActive && !capturedImage && <div className="pointer-events-none absolute inset-8 rounded-2xl border border-white/50" />}
           </div>
+          <button type="button" onClick={() => { stopCamera(); setCapturedImage(null); setDetectedPlate(''); setStatusMessage(''); }} className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm hover:bg-black/70" aria-label="Cerrar visor">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
-      {/* Grid del Escáner */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Visor de Cámara Cuadrado (2x2) / Vista previa */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2 text-base">
-              <Camera className="w-5 h-5 text-blue-600" />
-              <span>Visor de Cámara (2x2)</span>
-            </h3>
+      {detectedPlate && <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-center"><span className="font-mono text-2xl font-bold tracking-wider text-emerald-800">{detectedPlate}</span></div>}
 
-            {!isCameraActive ? (
-              <button
-                onClick={startCamera}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all"
-              >
-                Activar Cámara
-              </button>
-            ) : (
-              <button
-                onClick={stopCamera}
-                className="px-4 py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 font-bold text-xs rounded-xl transition-all"
-              >
-                Detener Cámara
-              </button>
-            )}
-          </div>
+      {currentAlert && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600"><ShieldAlert className="h-4 w-4" /><span>Vehículo reportado como robado</span></div>}
 
-          {/* Contenedor de Relación de Aspecto 2x2 Estricta (aspect-square) */}
-          <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-square flex items-center justify-center border border-slate-800">
-            {capturedImage ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
-                <img src={capturedImage} alt="Foto Capturada" className="w-full h-full object-contain" />
-                <div className="absolute bottom-3 bg-black/70 text-white text-[10px] px-3 py-1 rounded-full font-bold">
-                  Captura cuadrada 2x2 analizada
-                </div>
-              </div>
-            ) : (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full object-cover ${!isCameraActive && 'hidden'}`}
-              />
-            )}
+      {statusMessage && !currentAlert && <p className="mb-5 text-center text-xs font-medium text-slate-500">{statusMessage}</p>}
 
-            {!isCameraActive && !capturedImage && (
-              <div className="text-center p-6 text-slate-500 space-y-2">
-                <Camera className="w-12 h-12 mx-auto text-slate-600" />
-                <p className="text-sm font-medium">Cámara desactivada. Haz clic en "Activar Cámara".</p>
-              </div>
-            )}
-
-            {/* Guía visual interna también cuadrada (2x2) */}
-            {isCameraActive && !capturedImage && (
-              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="absolute top-[43%] w-[88%] h-[50%] border-2 border-dashed border-yellow-400 rounded-xl bg-yellow-400/10 flex items-center justify-center shadow-inner">
-                  <span className="text-[10px] uppercase font-bold text-yellow-200 bg-black/70 px-2 py-1 rounded text-center">
-                    Coloca la placa dentro del recuadro
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <canvas ref={canvasRef} className="hidden" />
-
-          {capturedImage ? (
-            <button
-              onClick={() => {
-                setCapturedImage(null);
-                setDetectedPlate('');
-                setStatusMessage('');
-              }}
-              className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="w-5 h-5" />
-              <span>Tomar Otra Fotografía</span>
-            </button>
-          ) : (
-            <button
-              onClick={captureAndScan}
-              disabled={!isCameraActive || processing}
-              className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2"
-            >
-              {processing ? (
-                <>
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Procesando imagen 2x2...</span>
-                </>
-              ) : (
-                <>
-                  <Camera className="w-5 h-5" />
-                  <span>Capturar y Extraer Matrícula</span>
-                </>
-              )}
-            </button>
-          )}
-        </div>
-
-        {/* Panel Lateral */}
-        <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="space-y-4">
-            <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-3 text-base">
-              Resultado de la Captura
-            </h3>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase">Matrícula Extraída</label>
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center">
-                <span className="font-mono font-black text-3xl tracking-widest text-slate-900">
-                  {detectedPlate || '--- ---'}
-                </span>
-              </div>
-            </div>
-
-            {statusMessage && (
-              <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-xs font-semibold text-blue-700 flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <span>{statusMessage}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
+      <div className="flex w-full max-w-xl flex-col justify-center gap-3 sm:flex-row">
+        <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-transform hover:-translate-y-0.5">
+          <Upload className="h-4 w-4" /> Subir foto
+        </button>
+        <button type="button" onClick={isCameraActive ? captureAndScan : startCamera} disabled={processing} className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:border-slate-400 hover:text-slate-950 disabled:opacity-50">
+          <Camera className="h-4 w-4" /> {isCameraActive ? (processing ? 'Escaneando...' : 'Tomar foto') : 'Activar cámara'}
+        </button>
       </div>
-    </div>
+
+      {isCameraActive && <button type="button" onClick={stopCamera} className="mt-4 text-xs font-semibold text-slate-400 hover:text-slate-700">Detener cámara</button>}
+
+      <canvas ref={canvasRef} className="hidden" />
+    </section>
   );
 }

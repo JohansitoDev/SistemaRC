@@ -1,30 +1,48 @@
 import React, { useState } from 'react';
-import { Camera, ClipboardList, Settings, Shield, Menu, X, Wifi } from 'lucide-react';
+import { Camera, ClipboardList, FileText, KeyRound, LogOut, Mail, Settings, Shield, Menu, UserCircle, X } from 'lucide-react';
+import { SettingsModal } from './SettingsModal.jsx';
 
-export default function SidebarLayout({ children, currentPath }) {
+export default function SidebarLayout({ children, currentPath, initialSettingsOpen = false }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(initialSettingsOpen);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const menuItems = [
     { name: 'Escaneo', path: '/', icon: Camera },
     { name: 'Historial', path: '/historial', icon: ClipboardList },
-    { name: 'Configuración', path: '/configuracion', icon: Settings },
+    { name: 'Configuración', path: '/configuracion', icon: Settings, action: 'settings' },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row">
-      <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <div className="app-main-surface min-h-screen text-slate-800 flex flex-col md:flex-row">
+      <header className="app-surface fixed inset-x-0 top-0 z-50 flex h-16 items-center justify-between border-b border-slate-200 px-4 shadow-sm md:px-6">
         <div className="flex items-center gap-2">
-          <Shield className="w-6 h-6 text-blue-600" />
-          <span className="font-black text-sm tracking-wider uppercase text-slate-900">
-            ALPR 
-          </span>
+          <button onClick={() => setIsOpen(!isOpen)} className="rounded-xl bg-slate-100 p-2 text-slate-600 transition-colors hover:bg-slate-200 md:hidden" aria-label="Abrir menú">
+            {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+          <div className="flex items-center gap-2">
+            <Shield className="h-6 w-6 text-slate-900" />
+            <span className="text-sm font-black uppercase tracking-wider text-slate-900">ALPR</span>
+          </div>
         </div>
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-          aria-label="Toggle Menu">
-          {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+
+        <div className="relative">
+          <button type="button" onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-900 text-xs font-black text-white shadow-sm ring-1 ring-slate-200 transition-transform hover:scale-105" aria-label="Abrir perfil" aria-expanded={isProfileOpen}>
+            <UserCircle className="h-6 w-6" />
+          </button>
+          {isProfileOpen && (
+            <div className="absolute right-0 top-12 w-64 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200">
+              <div className="border-b border-slate-100 px-3 py-3">
+                <p className="text-sm font-bold text-slate-900">Administrador</p>
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Mail className="h-3.5 w-3.5" /> admin@escaner.local</p>
+              </div>
+              <button type="button" className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><UserCircle className="h-4 w-4" /> Editar perfil</button>
+              <button type="button" className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><KeyRound className="h-4 w-4" /> Cambiar contraseña</button>
+              <button type="button" className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><FileText className="h-4 w-4" /> Política de seguridad</button>
+              <button type="button" className="mt-1 flex w-full items-center gap-2.5 rounded-xl border-t border-slate-100 px-3 py-2.5 pt-3 text-left text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> Cerrar sesión</button>
+            </div>
+          )}
+        </div>
       </header>
 
      
@@ -36,38 +54,45 @@ export default function SidebarLayout({ children, currentPath }) {
 
       
       <aside
-        className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-200 z-50 transform transition-transform duration-300 flex flex-col shadow-sm ${
+        className={`app-surface fixed top-16 left-0 z-40 flex h-[calc(100vh-4rem)] w-64 transform flex-col border-r border-slate-200 shadow-sm transition-transform duration-300 md:sticky md:top-16 ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}>
        
         <div className="p-6 hidden md:flex items-center gap-3 border-b border-slate-100">
-          <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
-            <Shield className="w-6 h-6" />
+          <div className="rounded-xl bg-slate-900 p-2 text-white">
+            <Shield className="h-6 w-6" />
           </div>
           <div>
             <h1 className="font-black text-sm tracking-wider uppercase text-slate-900">
-              ALPR
+              Escaner
             </h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-               Aplicacion web
-            </p>
           </div>
         </div>
 
        
         <nav className="flex-1 p-4 space-y-1.5 mt-2 overflow-y-auto">
           {menuItems.map((item) => {
-            const Icon = item.icon;
+            const Icon = item.icon; // la vista de escaneo dedebe verse ccomo la chagpt con dos botones subir foto y activar camara cunado le de activar camara el recuadro aparece
             const isActive = currentPath === item.path;
             return (
-              <a
+              item.action === 'settings' ? <button
+                key={item.path}
+                type="button"
+                onClick={() => { setIsOpen(false); setIsSettingsOpen(true); }}
+                className={`flex w-full items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-bold transition-all ${
+                  isSettingsOpen
+                    ? 'bg-slate-900 text-white shadow-md shadow-slate-900/10'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <Icon className={`w-5 h-5 ${isSettingsOpen ? 'text-white' : 'text-slate-400 group-hover:text-blue-600'}`} />
+                <span>{item.name}</span>
+              </button> : <a
                 key={item.path}
                 href={item.path}
                 onClick={() => setIsOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                    : 'text-slate-600 hover:bg-blue-50 hover:text-blue-600'
+                  isActive ? 'bg-slate-900 text-white shadow-md shadow-slate-900/10' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-600'}`} />
@@ -78,22 +103,23 @@ export default function SidebarLayout({ children, currentPath }) {
         </nav>
 
      
-        <div className="p-4 border-t border-slate-100 mt-auto">
-          <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+        <div className="mt-auto border-t border-slate-100 p-4">
+          <div className="flex items-center gap-2.5 px-1 text-xs font-semibold text-slate-600">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
-            <Wifi className="w-4 h-4 text-slate-400" />
-            <span>API: Localhost:8000</span>
+            
+            <span>App web escaneer</span>
           </div>
         </div>
       </aside>
 
    
-      <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto min-h-screen">
+      <main className="app-main-surface min-h-screen w-full max-w-7xl flex-1 p-4 pt-24 md:p-8 md:pt-24">
         {children}
       </main>
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

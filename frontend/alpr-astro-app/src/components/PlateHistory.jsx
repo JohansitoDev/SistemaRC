@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ShieldAlert, CheckCircle, Clock, Filter, AlertTriangle, FileSpreadsheet, RefreshCcw } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, Clock, Filter, FileSpreadsheet, RefreshCcw } from 'lucide-react';
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
+
+const formatDate = (value) => {
+  if (!value) return 'Fecha no disponible';
+
+  const normalizedValue = String(value).replace(/\.(\d{3})\d+Z$/, '.$1Z');
+  const date = new Date(normalizedValue);
+  if (Number.isNaN(date.getTime())) return 'Fecha no disponible';
+
+  return new Intl.DateTimeFormat('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+};
 
 export default function PlateHistory() {
   const [plates, setPlates] = useState([]);
@@ -129,22 +145,20 @@ export default function PlateHistory() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-500 font-extrabold uppercase tracking-wider">
-                <th className="p-4">Matrícula (MySQL)</th>
+                <th className="p-4">Matrícula</th>
                 <th className="p-4">Fecha y Hora</th>
-                <th className="p-4">Estado</th>
-                <th className="p-4">Detalle / Notificación</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="p-12 text-center text-slate-400 font-medium">
+                  <td colSpan="2" className="p-12 text-center text-slate-400 font-medium">
                     Cargando registros desde la base de datos...
                   </td>
                 </tr>
               ) : filteredPlates.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="p-12 text-center text-slate-400 font-medium bg-white">
+                  <td colSpan="2" className="p-12 text-center text-slate-400 font-medium bg-white">
                     <div className="flex flex-col items-center gap-2">
                       <FileSpreadsheet className="w-10 h-10 text-slate-300" />
                       <span className="text-slate-600 font-bold">No se encontraron registros en MySQL</span>
@@ -166,26 +180,8 @@ export default function PlateHistory() {
                     <td className="p-4 text-slate-600 font-medium text-xs">
                       <div className="flex items-center gap-1.5">
                         <Clock className="w-4 h-4 text-slate-400" />
-                        <span>{item.captured_at || item.created_at}</span>
+                        <span>{formatDate(item.captured_at || item.created_at)}</span>
                       </div>
-                    </td>
-
-                    {/* Badge de Estado */}
-                    <td className="p-4">
-                      {item.is_stolen ? (
-                        <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-black px-3 py-1 rounded-full shadow-sm">
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> ROBADA
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> REGISTRADA
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Detalle */}
-                    <td className="p-4 text-xs font-medium text-slate-600">
-                      {item.message || 'Procesado en base de datos MySQL'}
                     </td>
                   </tr>
                 ))

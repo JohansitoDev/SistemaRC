@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
+:root {
+  --app-background: #f8fafc;
+}
+
 body {
-  background-color: #f8fafc;
+  background-color: var(--app-background);
   color: #0f172a;
+  transition: background-color 240ms ease;
+}
+
+.app-main-surface {
+  background-color: var(--app-background);
+}
+
+.app-surface {
+  background-color: var(--app-background);
 }

@@ -172,7 +172,7 @@ export default function PlateDashboard() {
             </h2>
             <p className="text-sm font-semibold text-rose-100 mt-0.5">
               Matrícula:{' '}
-              <span className="bg-black/40 text-yellow-300 font-mono px-2 py-0.5 rounded tracking-widest text-base">
+              <span className="rounded bg-slate-950 px-2 py-0.5 font-mono text-base font-bold tracking-widest text-white ring-1 ring-white/20">
                 {currentAlert.plate_number}
               </span>
             </p>
