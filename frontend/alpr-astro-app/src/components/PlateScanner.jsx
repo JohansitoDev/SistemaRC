@@ -12,6 +12,7 @@ export default function PlateScanner() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [detectedPlate, setDetectedPlate] = useState('');
+  const [confidence, setConfidence] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [currentAlert, setCurrentAlert] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
@@ -38,6 +39,7 @@ export default function PlateScanner() {
       if (!rawClean) throw new Error('No se detectaron caracteres.');
 
       setDetectedPlate(rawClean);
+      setConfidence(typeof detectorData.confidence === 'number' ? detectorData.confidence : null);
       setStatusMessage(`Placa: ${rawClean}`);
 
       const response = await fetch(API_URL, {
@@ -48,7 +50,7 @@ export default function PlateScanner() {
 
       const resData = await response.json();
       const apiRecord = resData.plate || resData;
-      if (!response.ok && resData.status !== 'DUPLICATE') throw new Error(resData.message || 'Error del servidor.');
+      if (!response.ok && resData.status !== 'DUPLICATE') throw new Error(resData.error || resData.message || 'Error del servidor.');
 
       if (apiRecord.is_stolen) {
         setCurrentAlert(apiRecord);
@@ -72,6 +74,7 @@ export default function PlateScanner() {
     reader.onload = () => {
       setCapturedImage(reader.result);
       setDetectedPlate('');
+      setConfidence(null);
       scanImage(file);
     };
     reader.readAsDataURL(file);
@@ -98,6 +101,7 @@ export default function PlateScanner() {
         setIsCameraActive(true);
         setCapturedImage(null);
         setDetectedPlate('');
+        setConfidence(null);
         setStatusMessage('Cámara activa.');
       }
     } catch (err) {
@@ -173,13 +177,13 @@ export default function PlateScanner() {
           )}
           {isCameraActive && !capturedImage && <div className="pointer-events-none absolute inset-8 rounded-2xl border border-white/50" />}
           </div>
-          <button type="button" onClick={() => { stopCamera(); setCapturedImage(null); setDetectedPlate(''); setStatusMessage(''); }} className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm hover:bg-black/70" aria-label="Cerrar visor">
+          <button type="button" onClick={() => { stopCamera(); setCapturedImage(null); setDetectedPlate(''); setConfidence(null); setStatusMessage(''); }} className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm hover:bg-black/70" aria-label="Cerrar visor">
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {detectedPlate && <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-center"><span className="font-mono text-2xl font-bold tracking-wider text-emerald-800">{detectedPlate}</span></div>}
+      {detectedPlate && <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-center"><span className="font-mono text-2xl font-bold tracking-wider text-emerald-800">{detectedPlate}</span>{confidence !== null && <p className="mt-1 text-xs font-semibold text-emerald-700">Precisión: {(confidence * 100).toFixed(1)}%</p>}</div>}
 
       {currentAlert && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600"><ShieldAlert className="h-4 w-4" /><span>Vehículo reportado como robado</span></div>}
 

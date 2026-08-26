@@ -24,8 +24,9 @@ export default function PlateHistory() {
   const [filter, setFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('');
 
-  // Función para obtener las placas reales desde MySQL a través de Laravel
+  // Obtiene las placas guardadas en PostgreSQL a través de Laravel.
   const fetchPlatesFromDatabase = async () => {
     setLoading(true);
     try {
@@ -36,16 +37,16 @@ export default function PlateHistory() {
         }
       });
       
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error('Error al conectar con el servidor');
+        throw new Error(data.error || data.message || `Laravel respondió con HTTP ${response.status}`);
       }
 
-      const data = await response.json();
-      // Aseguramos que data sea un array, dependiendo de cómo devuelva la respuesta Laravel
       setPlates(Array.isArray(data) ? data : (data.data || []));
+      setStatusMessage('');
     } catch (error) {
-      console.error('Error cargando historial de MySQL:', error);
-      // Fallback temporal a localStorage si la API falla
+      console.error('Error cargando historial de PostgreSQL:', error);
+      setStatusMessage(error.message || 'No se pudo cargar el historial.');
       const localData = JSON.parse(localStorage.getItem('offline_plates') || '[]');
       setPlates(localData);
     } finally {
@@ -72,6 +73,11 @@ export default function PlateHistory() {
 
   return (
     <div className="space-y-6">
+      {statusMessage && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No se pudo cargar PostgreSQL: {statusMessage}. Mostrando registros locales.
+        </div>
+      )}
       {/* Controles: Buscador + Filtros + Botón de Actualizar */}
       <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
         

@@ -3,7 +3,7 @@
 ## Arranque del sistema
 
 1. Copia `.env.example` a `.env` y ajusta las URLs si usas otros puertos.
-2. Coloca los pesos YOLO de deteccion de placas en `../../plate-detector/models/`.
+2. El detector usa EasyOCR y no necesita pesos YOLO adicionales.
 3. Inicia el detector desde la carpeta `plate-detector`:
 
 ```powershell

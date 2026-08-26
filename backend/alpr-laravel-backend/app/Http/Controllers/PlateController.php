@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Plate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Exception;
 
 class PlateController extends Controller
@@ -64,9 +65,9 @@ class PlateController extends Controller
             }
 
             // Verificar automáticamente en la tabla stolen_plates con limpieza estricta
-            $stolenRecord = DB::table('stolen_plates')
-                ->whereRaw('UPPER(TRIM(plate_number)) = ?', [$plateNumberClean])
-                ->first();
+            $stolenRecord = Schema::hasTable('stolen_plates')
+                ? DB::table('stolen_plates')->whereRaw('UPPER(TRIM(plate_number)) = ?', [$plateNumberClean])->first()
+                : null;
 
             $isStolen = $stolenRecord !== null;
             $status = $isStolen ? 'ROBADA' : 'REGISTRADA';
@@ -75,19 +76,21 @@ class PlateController extends Controller
                 : 'Matrícula procesada correctamente';
 
             // Guardar el registro en la tabla plates de MySQL
-            $plate = Plate::create([
+            $plateData = [
                 'plate_number' => $plateNumberClean,
                 'captured_at' => $validated['captured_at'],
-                'is_stolen' => (bool) $isStolen,
-                'status' => $status,
-                'message' => $message
-            ]);
+            ];
+            if (Schema::hasColumn('plates', 'is_stolen')) $plateData['is_stolen'] = (bool) $isStolen;
+            if (Schema::hasColumn('plates', 'status')) $plateData['status'] = $status;
+            if (Schema::hasColumn('plates', 'message')) $plateData['message'] = $message;
+
+            $plate = Plate::create($plateData);
 
             return response()->json([
                 'success' => true,
                 'status' => $status,
                 'plate_number' => $plate->plate_number,
-                'is_stolen' => (bool) $plate->is_stolen,
+                'is_stolen' => (bool) ($plate->is_stolen ?? $isStolen),
                 'captured_at' => $plate->captured_at->toDateTimeString(),
                 'message' => $message,
                 'plate' => $plate,
