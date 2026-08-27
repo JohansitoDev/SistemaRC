@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, ShieldAlert, Upload, X } from 'lucide-react';
+import { Camera, LoaderCircle, ShieldAlert, Upload, X } from 'lucide-react';
 
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8001/api/plates';
 const ALPR_URL = import.meta.env.PUBLIC_ALPR_URL || 'http://localhost:8001';
 
 export default function PlateScanner() {
@@ -50,7 +50,7 @@ export default function PlateScanner() {
 
       const resData = await response.json();
       const apiRecord = resData.plate || resData;
-      if (!response.ok && resData.status !== 'DUPLICATE') throw new Error(resData.error || resData.message || 'Error del servidor.');
+      if (!response.ok && resData.status !== 'DUPLICATE') throw new Error(resData.detail || resData.error || resData.message || 'Error del servidor.');
 
       if (apiRecord.is_stolen) {
         setCurrentAlert(apiRecord);
@@ -183,11 +183,18 @@ export default function PlateScanner() {
         </div>
       )}
 
-      {detectedPlate && <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-center"><span className="font-mono text-2xl font-bold tracking-wider text-emerald-800">{detectedPlate}</span>{confidence !== null && <p className="mt-1 text-xs font-semibold text-emerald-700">Precisión: {(confidence * 100).toFixed(1)}%</p>}</div>}
+      {processing && (
+        <div className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-600 shadow-sm" role="status" aria-live="polite">
+          <LoaderCircle className="h-5 w-5 animate-spin text-slate-900" />
+          <span>Analizando imagen...</span>
+        </div>
+      )}
+
+      {!processing && detectedPlate && <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-center" role="status"><span className="font-mono text-2xl font-bold tracking-wider text-emerald-800">{detectedPlate}</span>{confidence !== null && <p className="mt-1 text-xs font-semibold text-emerald-700">Precisión: {(confidence * 100).toFixed(1)}%</p>}</div>}
 
       {currentAlert && <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600"><ShieldAlert className="h-4 w-4" /><span>Vehículo reportado como robado</span></div>}
 
-      {statusMessage && !currentAlert && <p className="mb-5 text-center text-xs font-medium text-slate-500">{statusMessage}</p>}
+      {!processing && statusMessage && !currentAlert && <p className="mb-5 text-center text-xs font-medium text-slate-500">{statusMessage}</p>}
 
       <div className="flex w-full max-w-xl flex-col justify-center gap-3 sm:flex-row">
         <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-transform hover:-translate-y-0.5">

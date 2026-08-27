@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Car, ShieldAlert, CheckCircle } from 'lucide-react';
 
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8001/api/plates';
 
 export default function PlateDashboard() {
   const [plateInput, setPlateInput] = useState('');
@@ -32,7 +32,7 @@ export default function PlateDashboard() {
     normal: history.filter(item => !(item.is_stolen === true || item.is_stolen === 1)).length,
   };
 
-  // Envío a la API de Laravel
+  // Envío al backend FastAPI
   const handleScanPlate = async (e) => {
     e.preventDefault();
     if (!plateInput.trim()) return;
@@ -90,8 +90,8 @@ export default function PlateDashboard() {
       setHistory((prev) => [newRecord, ...prev]);
       setPlateInput('');
     } catch (error) {
-      console.error('Error conectando a Laravel:', error);
-      alert('No se pudo conectar con el backend de Laravel.');
+      console.error('Error conectando a FastAPI:', error);
+      alert('No se pudo conectar con el backend FastAPI.');
     } finally {
       setLoading(false);
     }

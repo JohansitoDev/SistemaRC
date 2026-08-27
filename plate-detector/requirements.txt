@@ -5,3 +5,5 @@ opencv-python
 numpy
 Pillow
 easyocr
+sqlalchemy
+pymysql

@@ -22,11 +22,11 @@ export default function SidebarLayout({ children, currentPath, initialSettingsOp
           </button>
           <div className="flex items-center gap-2">
             <Shield className="h-6 w-6 text-slate-900" />
-            <span className="text-sm font-black uppercase tracking-wider text-slate-900">ALPR</span>
+            <span className="text-sm font-black uppercase tracking-wider text-slate-900">Escaneo</span>
           </div>
         </div>
 
-        <div className="relative">
+        {/* <div className="relative">
           <button type="button" onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-900 text-xs font-black text-white shadow-sm ring-1 ring-slate-200 transition-transform hover:scale-105" aria-label="Abrir perfil" aria-expanded={isProfileOpen}>
             <UserCircle className="h-6 w-6" />
           </button>
@@ -42,7 +42,7 @@ export default function SidebarLayout({ children, currentPath, initialSettingsOp
               <button type="button" className="mt-1 flex w-full items-center gap-2.5 rounded-xl border-t border-slate-100 px-3 py-2.5 pt-3 text-left text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> Cerrar sesión</button>
             </div>
           )}
-        </div>
+        </div> */}
       </header>
 
      
@@ -59,12 +59,9 @@ export default function SidebarLayout({ children, currentPath, initialSettingsOp
         }`}>
        
         <div className="p-6 hidden md:flex items-center gap-3 border-b border-slate-100">
-          <div className="rounded-xl bg-slate-900 p-2 text-white">
-            <Shield className="h-6 w-6" />
-          </div>
           <div>
             <h1 className="font-black text-sm tracking-wider uppercase text-slate-900">
-              Escaner
+              APP WEB Escaner
             </h1>
           </div>
         </div>

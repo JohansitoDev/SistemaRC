@@ -5,7 +5,7 @@ export default function PlateStats() {
   const [stats, setStats] = useState({ total: 0, stolen: 0, normal: 0 });
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/plates/stats')
+    fetch(`${import.meta.env.PUBLIC_API_URL || 'http://localhost:8001/api/plates'}/stats`)
       .then((res) => res.json())
       .then((data) => {
         if (data) {

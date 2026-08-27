@@ -4,27 +4,39 @@
 
 1. Copia `.env.example` a `.env` y ajusta las URLs si usas otros puertos.
 2. El detector usa EasyOCR y no necesita pesos YOLO adicionales.
-3. Inicia el detector desde la carpeta `plate-detector`:
+3. Configura la conexión a la base de datos y arranca el backend único desde la carpeta `plate-detector`:
 
 ```powershell
+cd ..\..\plate-detector
 python -m pip install -r requirements.txt
+$env:DATABASE_URL="mysql+pymysql://root:@127.0.0.1:3306/laravel"
 python -m uvicorn server:app --host 0.0.0.0 --port 8001
 ```
 
-4. Inicia Laravel en el puerto 8000 y ejecuta sus migraciones:
+FastAPI reutiliza las tablas existentes (`plates` y `stolen_plates`), por lo que no necesitas migrar los datos.
 
-```powershell
-php artisan migrate
+El backend está separado por responsabilidad:
+
+```text
+plate-detector/
+├── server.py                 # Punto de entrada FastAPI
+└── alpr_backend/
+	├── api.py                # Rutas HTTP
+	├── ocr.py                # Preprocesamiento y EasyOCR
+	├── database.py            # Motor SQLAlchemy
+	├── models.py              # Tablas existentes
+	├── schemas.py             # Validación de solicitudes
+	└── config.py              # Configuración de base de datos
 ```
 
-5. Inicia este frontend:
+4. Inicia este frontend:
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Abre `https://localhost:4321`. La cámara captura la imagen, el detector devuelve la lectura y Laravel la guarda y comprueba si está reportada.
+Abre `https://localhost:4321`. FastAPI recibe la imagen, ejecuta EasyOCR, comprueba si la matrícula está reportada y guarda la captura.
 
 ```sh
 npm create astro@latest -- --template minimal

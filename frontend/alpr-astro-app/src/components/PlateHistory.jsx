@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShieldAlert, CheckCircle, Clock, Filter, FileSpreadsheet, RefreshCcw } from 'lucide-react';
 
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8000/api/plates';
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8001/api/plates';
 
 const formatDate = (value) => {
   if (!value) return 'Fecha no disponible';
@@ -26,7 +26,7 @@ export default function PlateHistory() {
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('');
 
-  // Obtiene las placas guardadas en PostgreSQL a través de Laravel.
+  // Obtiene las placas guardadas a través de FastAPI.
   const fetchPlatesFromDatabase = async () => {
     setLoading(true);
     try {
@@ -39,13 +39,13 @@ export default function PlateHistory() {
       
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || data.message || `Laravel respondió con HTTP ${response.status}`);
+        throw new Error(data.detail || data.error || data.message || `FastAPI respondió con HTTP ${response.status}`);
       }
 
       setPlates(Array.isArray(data) ? data : (data.data || []));
       setStatusMessage('');
     } catch (error) {
-      console.error('Error cargando historial de PostgreSQL:', error);
+      console.error('Error cargando historial:', error);
       setStatusMessage(error.message || 'No se pudo cargar el historial.');
       const localData = JSON.parse(localStorage.getItem('offline_plates') || '[]');
       setPlates(localData);
@@ -75,7 +75,7 @@ export default function PlateHistory() {
     <div className="space-y-6">
       {statusMessage && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No se pudo cargar PostgreSQL: {statusMessage}. Mostrando registros locales.
+          No se pudo cargar el historial: {statusMessage}. Mostrando registros locales.
         </div>
       )}
       {/* Controles: Buscador + Filtros + Botón de Actualizar */}
@@ -94,11 +94,11 @@ export default function PlateHistory() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Botón para refrescar datos desde MySQL */}
+          {/* Botón para refrescar datos desde FastAPI */}
           <button
             onClick={fetchPlatesFromDatabase}
             className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl shadow-sm transition-all flex items-center gap-2 text-xs font-bold"
-            title="Sincronizar con MySQL"
+            title="Sincronizar con FastAPI"
           >
             <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Actualizar</span>
@@ -145,7 +145,7 @@ export default function PlateHistory() {
         </div>
       </div>
 
-      {/* Tabla con datos de MySQL */}
+      {/* Tabla con datos persistidos */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -167,8 +167,8 @@ export default function PlateHistory() {
                   <td colSpan="2" className="p-12 text-center text-slate-400 font-medium bg-white">
                     <div className="flex flex-col items-center gap-2">
                       <FileSpreadsheet className="w-10 h-10 text-slate-300" />
-                      <span className="text-slate-600 font-bold">No se encontraron registros en MySQL</span>
-                      <p className="text-xs text-slate-400">Verifica que tu backend en Laravel esté respondiendo correctamente.</p>
+                      <span className="text-slate-600 font-bold">No se encontraron registros</span>
+                        <p className="text-xs text-slate-400">Verifica que el backend FastAPI esté respondiendo correctamente.</p>
                     </div>
                   </td>
                 </tr>
