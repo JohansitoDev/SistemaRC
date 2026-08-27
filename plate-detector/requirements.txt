@@ -6,4 +6,8 @@ numpy
 Pillow
 easyocr
 sqlalchemy
-pymysql
+psycopg2-binary
+python-dotenv
+bcrypt
+PyJWT
+email-validator

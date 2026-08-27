@@ -1,6 +1,7 @@
 ---
 import SidebarLayout from '../components/SidebarLayout.jsx';
 import PlateScanner from '../components/PlateScanner.jsx';
+import WelcomeScreen from '../components/WelcomeScreen.jsx';
 import '../styles/global.css';
 ---
 
@@ -12,7 +13,9 @@ import '../styles/global.css';
   </head>
   <body class="bg-slate-50 text-slate-800">
     <SidebarLayout currentPath="/" client:load>
-      <PlateScanner client:load />
+      <WelcomeScreen client:load>
+        <PlateScanner client:load />
+      </WelcomeScreen>
     </SidebarLayout>
   </body>
 </html>

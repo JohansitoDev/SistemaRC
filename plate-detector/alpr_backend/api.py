@@ -1,5 +1,6 @@
 from datetime import datetime
 from io import BytesIO
+import logging
 import re
 
 import cv2
@@ -12,15 +13,64 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from .database import engine
-from .models import Plate, StolenPlate
+from .models import Plate, StolenPlate, User
 from .ocr import detect_plate
 from .schemas import PlatePayload
+from .auth import create_access_token, hash_password, verify_password
+from .user_schemas import LoginPayload, RegisterPayload
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def normalize_plate(value: str) -> str:
     return re.sub(r'[^A-Z0-9]', '', value.upper().strip())
+
+
+@router.post('/api/register', status_code=201)
+def register(payload: RegisterPayload) -> dict[str, object]:
+    email = str(payload.email).lower()
+    try:
+        with Session(engine) as session:
+            if session.scalar(select(User).where(User.email == email)):
+                raise HTTPException(status_code=409, detail='Ya existe una cuenta con ese correo electrónico.')
+
+            user = User(name=payload.name.strip(), email=email, password=hash_password(payload.password))
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            token = create_access_token(user.id, user.email)
+            return {
+                'access_token': token,
+                'token_type': 'bearer',
+                'user': {'id': user.id, 'name': user.name, 'email': user.email},
+            }
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        logger.exception('Error registrando usuario en PostgreSQL.')
+        raise HTTPException(status_code=503, detail='No se pudo crear la cuenta.') from error
+
+
+@router.post('/api/login')
+def login(payload: LoginPayload) -> dict[str, object]:
+    email = str(payload.email).lower()
+    try:
+        with Session(engine) as session:
+            user = session.scalar(select(User).where(User.email == email))
+            if not user or not verify_password(payload.password, user.password):
+                raise HTTPException(status_code=401, detail='Correo o contraseña incorrectos.')
+
+            return {
+                'access_token': create_access_token(user.id, user.email),
+                'token_type': 'bearer',
+                'user': {'id': user.id, 'name': user.name, 'email': user.email},
+            }
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        logger.exception('Error autenticando usuario en PostgreSQL.')
+        raise HTTPException(status_code=503, detail='No se pudo iniciar sesión.') from error
 
 
 @router.get('/health')
@@ -98,6 +148,7 @@ def create_plate(payload: PlatePayload) -> dict[str, object]:
                 },
             }
     except SQLAlchemyError as error:
+        logger.exception('Error guardando matrícula en PostgreSQL.')
         raise HTTPException(status_code=503, detail='No se pudo guardar la matrícula en la base de datos.') from error
 
 
@@ -118,6 +169,7 @@ def list_plates() -> list[dict[str, object]]:
                 for plate in plates
             ]
     except SQLAlchemyError as error:
+        logger.exception('Error consultando historial en PostgreSQL.')
         raise HTTPException(status_code=503, detail='No se pudo consultar el historial.') from error
 
 
@@ -131,4 +183,5 @@ def plate_stats() -> dict[str, int]:
             ) or 0
             return {'total': total, 'stolen': stolen, 'normal': total - stolen}
     except SQLAlchemyError as error:
+        logger.exception('Error consultando estadísticas en PostgreSQL.')
         raise HTTPException(status_code=503, detail='No se pudieron consultar las estadísticas.') from error

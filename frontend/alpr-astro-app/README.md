@@ -9,7 +9,6 @@
 ```powershell
 cd ..\..\plate-detector
 python -m pip install -r requirements.txt
-$env:DATABASE_URL="mysql+pymysql://root:@127.0.0.1:3306/laravel"
 python -m uvicorn server:app --host 0.0.0.0 --port 8001
 ```
 

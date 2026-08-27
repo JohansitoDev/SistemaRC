@@ -1,11 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Camera, ClipboardList, FileText, KeyRound, LogOut, Mail, Settings, Shield, Menu, UserCircle, X } from 'lucide-react';
-import { SettingsModal } from './SettingsModal.jsx';
 
-export default function SidebarLayout({ children, currentPath, initialSettingsOpen = false }) {
+export default function SidebarLayout({ children, currentPath }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(initialSettingsOpen);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const savedUser = window.localStorage.getItem('auth_user');
+    if (savedUser) setUser(JSON.parse(savedUser));
+
+    const savedBackground = window.localStorage.getItem('alpr-background');
+    if (savedBackground) {
+      try {
+        const background = JSON.parse(savedBackground);
+        if (background?.color) {
+          document.documentElement.style.setProperty('--app-background', background.color);
+          document.documentElement.style.setProperty('--app-background-image', background.image ? `url(${background.image})` : 'none');
+        }
+      } catch {
+        document.documentElement.style.setProperty('--app-background', savedBackground);
+        document.documentElement.style.setProperty('--app-background-image', 'none');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    window.localStorage.removeItem('token');
+    window.localStorage.removeItem('auth_user');
+    window.sessionStorage.removeItem('show_welcome');
+    setUser(null);
+    setIsProfileOpen(false);
+    window.location.href = '/login';
+  };
 
   const menuItems = [
     { name: 'Escaneo', path: '/', icon: Camera },
@@ -26,23 +53,23 @@ export default function SidebarLayout({ children, currentPath, initialSettingsOp
           </div>
         </div>
 
-        {/* <div className="relative">
+         <div className="relative">
           <button type="button" onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-slate-900 text-xs font-black text-white shadow-sm ring-1 ring-slate-200 transition-transform hover:scale-105" aria-label="Abrir perfil" aria-expanded={isProfileOpen}>
             <UserCircle className="h-6 w-6" />
           </button>
           {isProfileOpen && (
             <div className="absolute right-0 top-12 w-64 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200">
               <div className="border-b border-slate-100 px-3 py-3">
-                <p className="text-sm font-bold text-slate-900">Administrador</p>
-                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Mail className="h-3.5 w-3.5" /> admin@escaner.local</p>
+                <p className="text-sm font-bold text-slate-900">{user?.name || 'Usuario'}</p>
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><Mail className="h-3.5 w-3.5" /> {user?.email || 'Sin correo'}</p>
               </div>
               <button type="button" className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><UserCircle className="h-4 w-4" /> Editar perfil</button>
               <button type="button" className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><KeyRound className="h-4 w-4" /> Cambiar contraseña</button>
               <button type="button" className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><FileText className="h-4 w-4" /> Política de seguridad</button>
-              <button type="button" className="mt-1 flex w-full items-center gap-2.5 rounded-xl border-t border-slate-100 px-3 py-2.5 pt-3 text-left text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> Cerrar sesión</button>
+              <button type="button" onClick={handleLogout} className="mt-1 flex w-full items-center gap-2.5 rounded-xl border-t border-slate-100 px-3 py-2.5 pt-3 text-left text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> Cerrar sesión</button>
             </div>
           )}
-        </div> */}
+        </div> 
       </header>
 
      
@@ -72,19 +99,15 @@ export default function SidebarLayout({ children, currentPath, initialSettingsOp
             const Icon = item.icon; // la vista de escaneo dedebe verse ccomo la chagpt con dos botones subir foto y activar camara cunado le de activar camara el recuadro aparece
             const isActive = currentPath === item.path;
             return (
-              item.action === 'settings' ? <button
+              item.action === 'settings' ? <a
                 key={item.path}
-                type="button"
-                onClick={() => { setIsOpen(false); setIsSettingsOpen(true); }}
-                className={`flex w-full items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-bold transition-all ${
-                  isSettingsOpen
-                    ? 'bg-slate-900 text-white shadow-md shadow-slate-900/10'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
+                href={item.path}
+                onClick={() => setIsOpen(false)}
+                className={`flex w-full items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-bold transition-all ${isActive ? 'bg-slate-900 text-white shadow-md shadow-slate-900/10' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
               >
-                <Icon className={`w-5 h-5 ${isSettingsOpen ? 'text-white' : 'text-slate-400 group-hover:text-blue-600'}`} />
+                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-600'}`} />
                 <span>{item.name}</span>
-              </button> : <a
+              </a> : <a
                 key={item.path}
                 href={item.path}
                 onClick={() => setIsOpen(false)}
@@ -104,7 +127,6 @@ export default function SidebarLayout({ children, currentPath, initialSettingsOp
       <main className="app-main-surface min-h-screen w-full max-w-7xl flex-1 p-4 pt-24 md:p-8 md:pt-24">
         {children}
       </main>
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

@@ -23,3 +23,14 @@ class StolenPlate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     plate_number: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    
+
+class User(Base):
+    __tablename__ = 'users'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    password: Mapped[str] = mapped_column(String(255))
+    remember_token: Mapped[str | None] = mapped_column(String(100), nullable=True)
